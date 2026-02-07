@@ -7,8 +7,12 @@ This module provides functionality to scrape real-time market data from TGJU.org
 retrieval, HTTP requests with retry logic, and database operations.
 
 Environment Variables Required:
-    TGJU_DB_CONNECTION: SQL Server connection string
-        Example: mssql+pyodbc://user:pass@server/db?driver=ODBC+Driver+17+for+SQL+Server
+    See .env.example for complete list of required variables.
+    
+    Quick setup:
+    1. Copy .env.example to .env
+    2. Fill in your database credentials
+    3. Run: python tgjuScraper.py
 
 Created: 2025-08-31
 Author: sadeghi.a
@@ -29,6 +33,9 @@ import warnings
 import time
 import random
 import os
+
+# Import secure configuration module
+from config import get_connection_string, get_table_name, load_env_file
 
 warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
@@ -564,7 +571,8 @@ def save_to_database(data):
     Persist scraped data to SQL Server database.
     
     Connects to MSSQL database and appends records using SQLAlchemy.
-    Specifies data types for each column to ensure proper storage:
+    Uses secure configuration from config module.
+    Specifies exact data types for each column to ensure proper storage:
     - CHAR for fixed-length strings (dates, time)
     - VARCHAR for variable-length strings (symbols, names)
     - NVARCHAR for Unicode text (Persian names)
@@ -575,12 +583,12 @@ def save_to_database(data):
         data (pd.DataFrame): DataFrame with scraped data to persist
         
     Raises:
-        ValueError: If TGJU_DB_CONNECTION environment variable is not set
+        ValueError: If database configuration is missing or invalid
         Exception: If database insertion fails
     """
     logger.info("Phase 4: Database Persistence - Starting database insertion...")
     
-    # Define column data types for SQL Server
+    # Define column data types for SQL Server (EXACT same as before)
     column_types = {
         'PersianDate': CHAR(10),
         'EnglishDate': DATETIME(),
@@ -596,34 +604,41 @@ def save_to_database(data):
         'ScrapeDateTime': DATETIME()
     }
     
-    # Get database connection from environment variable
-    connection_string = os.getenv('TGJU_DB_CONNECTION')
-    
-    if not connection_string:
-        error_msg = (
-            "Database connection string not found!\n"
-            "Please set TGJU_DB_CONNECTION environment variable.\n"
-            "Example: mssql+pyodbc://user:pass@server/db?driver=ODBC+Driver+17+for+SQL+Server"
-        )
-        logger.critical(error_msg)
-        raise ValueError(error_msg)
-    
-    logger.debug("Database connection string loaded from environment variable")
-    
     try:
+        # Load environment variables from .env file
+        logger.info("Loading database configuration...")
+        load_env_file()
+        
+        # Get secure connection string from config module
+        connection_string = get_connection_string(prefix='TGJU_DB')
+        logger.debug("Database connection string loaded successfully")
+        
+        # Get table name from config (defaults to 'TgjuAssets')
+        table_name = get_table_name(prefix='TGJU_DB', default='TgjuAssets')
+        
+        # Create database engine
         logger.info(f"Connecting to database...")
         engine = create_engine(connection_string)
         
-        logger.info(f"Inserting {len(data)} rows into TgjuAssets table...")
+        # Insert data into database
+        logger.info(f"Inserting {len(data)} rows into {table_name} table...")
         data.to_sql(
-            name='TgjuAssets',
+            name=table_name,
             con=engine,
             if_exists='append',
             index=False,
             dtype=column_types
         )
         
-        logger.info(f"Successfully inserted {len(data)} rows into TgjuAssets table.")
+        logger.info(f"Successfully inserted {len(data)} rows into {table_name} table.")
+        
+    except ValueError as config_error:
+        logger.critical(f"Configuration error: {config_error}")
+        logger.info("\nPlease ensure:")
+        logger.info("1. .env file exists (copy from .env.example)")
+        logger.info("2. All required variables are set (TGJU_DB_SERVER, TGJU_DB_NAME, etc.)")
+        logger.info("3. No placeholder values remain in .env file")
+        sys.exit(1)
         
     except Exception as db_error:
         error_msg = f"Failed to insert data into database: {db_error}"
