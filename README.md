@@ -1,7 +1,5 @@
 # TGJU Data Collector
 
-> بهینه شده و تمیز شده برای production | Optimized for production use
-
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0+-green.svg)
 ![Code Quality](https://img.shields.io/badge/Code%20Quality-Sonar%20Verified-brightgreen.svg)
@@ -17,7 +15,7 @@ Real-time market data scraper for TGJU.org (Tehran Gold and Jewelry Union) with 
 - **Persian Date Support**: Converts Gregorian to Persian calendar automatically
 - **Database Integration**: Seamless SQL Server persistence with proper type mapping
 - **Configuration Management**: Uses environment variables for sensitive credentials
-- **Production-Ready**: Passes Sonar Code Quality checks, cognitive complexity optimized
+- **Production-Ready Code**: Passes Sonar Code Quality checks, cognitive complexity optimized
 
 ## Architecture 🏗️
 
@@ -51,53 +49,101 @@ pip install -r requirements.txt
 
 ### Configuration
 
-Set database connection environment variable:
+#### Option 1: Using Environment File (Recommended)
+
+```bash
+# Copy example configuration
+cp .env.example .env
+
+# Edit .env with your database credentials
+# NEVER commit .env to version control - it's in .gitignore
+```
+
+Example `.env` file:
+```env
+TGJU_DB_SERVER=localhost
+TGJU_DB_NAME=tgju
+TGJU_DB_USER=sa
+TGJU_DB_PASSWORD=YourSecurePassword123!
+TGJU_DB_DRIVER=ODBC Driver 17 for SQL Server
+TGJU_DB_PORT=1433
+
+LOG_LEVEL=INFO
+LOG_DIR=logs
+```
+
+#### Option 2: Direct Environment Variables
 
 ```bash
 # Linux/macOS
-export TGJU_DB_CONNECTION="mssql+pyodbc://username:password@server/database?driver=ODBC+Driver+17+for+SQL+Server"
+export TGJU_DB_SERVER=localhost
+export TGJU_DB_NAME=tgju
+export TGJU_DB_USER=sa
+export TGJU_DB_PASSWORD="YourSecurePassword123!"
 
 # Windows (PowerShell)
-$env:TGJU_DB_CONNECTION="mssql+pyodbc://username:password@server/database?driver=ODBC+Driver+17+for+SQL+Server"
-
-# Or use trusted connection (Windows)
-export TGJU_DB_CONNECTION="mssql+pyodbc://username@server/database?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
+$env:TGJU_DB_SERVER="localhost"
+$env:TGJU_DB_NAME="tgju"
+$env:TGJU_DB_USER="sa"
+$env:TGJU_DB_PASSWORD="YourSecurePassword123!"
 ```
+
+#### Option 3: Complete Connection String
+
+```bash
+# Use this if you prefer a single connection string
+export TGJU_DB_CONNECTION_STRING="mssql+pyodbc://username:password@server:1433/database?driver=ODBC+Driver+17+for+SQL+Server"
+```
+
+**Priority**: Complete connection string > Individual components
 
 ## Usage 📖
 
 ### Basic Execution
 
 ```bash
-python tgjuScraper.py
+python tgju_scraper.py
 ```
 
 ### Output Example
 
 ```
-[INFO] Starting symbol collection...
-[INFO] Fetching main symbols...
-[INFO] Fetching energy symbols...
-[INFO] Found 85 symbols to scrape
-[INFO] Starting latest data scraping for 85 symbols...
-[INFO] Processing 1/85: طلای آب شده
-[SUCCESS] Got latest record for طلای آب شده
-[INFO] Processing 2/85: طلای سکه امامی
-[SUCCESS] Got latest record for طلای سکه امامی
+2026-02-07 10:35:00,123 - __main__ - INFO - ============================================================
+2026-02-07 10:35:00,125 - __main__ - INFO - Starting TGJU Market Data Scraper
+2026-02-07 10:35:00,127 - __main__ - INFO - ============================================================
+2026-02-07 10:35:00,245 - __main__ - INFO - Starting symbol collection...
+2026-02-07 10:35:00,346 - __main__ - INFO - Fetching main TGJU symbols...
+2026-02-07 10:35:02,567 - __main__ - INFO - Extracted 75 main symbols
+2026-02-07 10:35:02,890 - __main__ - INFO - Fetching TGJU energy symbols...
+2026-02-07 10:35:03,234 - __main__ - INFO - Extracted 10 energy symbols
+2026-02-07 10:35:03,456 - __main__ - INFO - Symbol collection complete: 85 symbols found
+2026-02-07 10:35:03,500 - __main__ - INFO - Starting data scraping for 85 symbols...
+2026-02-07 10:35:03,502 - __main__ - INFO - [1/85] Processing: طلای آب شده
+2026-02-07 10:35:04,123 - __main__ - DEBUG - Successfully scraped latest data for طلای آب شده
 ...
-[SUMMARY] Latest data scraping complete!
-[SUMMARY] Successful: 82
-[SUMMARY] Failed: 3
-[INFO] Final dataset contains 82 latest records
-[SUCCESS] Inserted 82 rows into TgjuAssets table.
-[INFO] Script execution completed successfully!
+2026-02-07 10:42:15,890 - __main__ - INFO - ============================================================
+2026-02-07 10:42:15,892 - __main__ - INFO - Data scraping phase complete
+2026-02-07 10:42:15,893 - __main__ - INFO - Successful: 82/85
+2026-02-07 10:42:15,894 - __main__ - INFO - Failed: 3/85
+2026-02-07 10:42:15,896 - __main__ - INFO - ============================================================
+2026-02-07 10:42:16,123 - __main__ - INFO - Aggregated 82 latest records
+2026-02-07 10:42:16,345 - config - INFO - Loaded environment variables from .env
+2026-02-07 10:42:16,456 - config - INFO - Built connection string from TGJU_DB_* environment variables
+2026-02-07 10:42:16,567 - __main__ - INFO - Connecting to database...
+2026-02-07 10:42:16,890 - __main__ - INFO - Inserting 82 rows into TgjuAssets table...
+2026-02-07 10:42:17,234 - __main__ - INFO - Successfully inserted 82 rows into TgjuAssets table
+2026-02-07 10:42:17,345 - __main__ - INFO - ============================================================
+2026-02-07 10:42:17,347 - __main__ - INFO - Script execution completed successfully!
+2026-02-07 10:42:17,349 - __main__ - INFO - ============================================================
 ```
 
 ## Code Structure 📁
 
 ```python
-# Configuration Module
-DEFAULT_USER_AGENT, TGJU_MAIN_URL, CONNECTION_TIMEOUT_WAIT, etc.
+# Configuration Module (config.py)
+load_env_file()          # Load .env file
+get_connection_string()  # Build DB connection string
+get_table_name()         # Get table name from env
 
 # HTTP Request Module
 safe_request()  # Resilient HTTP GET with retry logic
@@ -120,14 +166,15 @@ save_to_database()  # SQL Server integration
 
 ## Data Flow 🔄
 
-1. **Symbol Discovery**: Extracts commodity symbols from TGJU navigation menu and energy section
-2. **Validation**: Deduplicates and validates symbol format consistency
-3. **Data Retrieval**: Fetches 24-hour historical data via API for each symbol
-4. **Transformation**:
+1. **Configuration**: Loads environment variables from `.env` file
+2. **Symbol Discovery**: Extracts commodity symbols from TGJU navigation menu and energy section
+3. **Validation**: Deduplicates and validates symbol format consistency
+4. **Data Retrieval**: Fetches 24-hour historical data via API for each symbol
+5. **Transformation**:
    - Unix timestamp → DateTime
    - Gregorian → Persian calendar
    - Extract weekday
-5. **Persistence**: Appends records to SQL Server with proper type mapping
+6. **Persistence**: Appends records to SQL Server with proper type mapping
 
 ## Database Schema 📊
 
@@ -161,70 +208,89 @@ CREATE TABLE TgjuAssets (
 - Ensures symbol format correctness
 - Rate-limits requests (0.5-1s delays)
 
+### Logging Levels
+- **DEBUG**: Detailed diagnostic information
+- **INFO**: General informational messages
+- **WARNING**: Warning messages (recoverable issues)
+- **ERROR**: Error messages (non-fatal failures)
+- **CRITICAL**: Critical errors (script termination)
+
 ## Performance Metrics ⚡
 
 - **Code Quality**: Passes Sonar verification
 - **Cognitive Complexity**: 15 (reduced from 22)
 - **Execution Time**: ~2-3 minutes for 80+ symbols
 - **Success Rate**: Typically 95%+ with error recovery
-
-## Logging 📝
-
-Logging uses standardized prefixes:
-
-```
-[INFO]    - General information
-[RETRY]   - Retry attempt
-[WAIT]    - Waiting for timeout
-[SUCCESS] - Successful operation
-[SKIP]    - Skipped (not critical)
-[ERROR]   - Error condition
-[FAILED]  - Failed operation
-[SUMMARY] - Summary statistics
-```
+- **Log Output**: Both file (`tgju_scraper.log`) and console
 
 ## Security 🔐
 
-- **Credentials**: Never hardcoded—uses environment variables
+- **Credentials**: Never hardcoded—uses environment variables exclusively
+- **Validation**: Environment variables checked for placeholder values before use
 - **User Agent**: Spoofed to avoid blocking
 - **Rate Limiting**: Built-in delays to avoid DOS
 - **Data Validation**: Sanitizes inputs before database insertion
+- **Connection String Encoding**: Special characters URL-encoded for safety
 
 ## Troubleshooting 🔧
 
+### Missing Environment Variables
+```
+ValueError: ❌ Missing required environment variables: TGJU_DB_SERVER, TGJU_DB_NAME, TGJU_DB_USER, TGJU_DB_PASSWORD
+```
+**Solution**: Copy `.env.example` to `.env` and fill in your database credentials
+
 ### Connection Timeout
 ```
-[WAIT] Connection timeout detected. Waiting 10 minutes before retry...
+2026-02-07 10:35:00,500 - __main__ - INFO - Connection timeout detected. Waiting 10 minutes before retry...
 ```
 **Solution**: Check network connectivity and firewall rules
 
 ### No Symbols Found
 ```
-[ERROR] Could not extract symbols from main page
-[FATAL ERROR] Script failed: No symbols could be fetched from any source!
+2026-02-07 10:35:00,500 - __main__ - ERROR - Could not extract symbols from main page
 ```
-**Solution**: TGJU website structure may have changed—check XPath expressions
+**Solution**: TGJU website structure may have changed—verify XPath expressions
 
 ### Database Connection Failed
 ```
-[DB ERROR] Failed to insert data: ...
+2026-02-07 10:42:16,890 - __main__ - ERROR - Database operation failed: ...
 ```
-**Solution**: Verify `TGJU_DB_CONNECTION` environment variable and SQL Server accessibility
+**Solution**: 
+1. Verify ODBC Driver 17 is installed: `odbcad32.exe` (Windows) or test connection
+2. Test connection string: `python config.py`
+3. Check SQL Server is running and accessible
+4. Verify database exists and credentials are correct
+
+## Testing Configuration
+
+```bash
+# Test if configuration is correct
+python config.py
+
+# Output:
+# ============================================================
+# Configuration Status
+# ============================================================
+#
+# .env file: ✓ Found
+#
+# Database Configuration:
+#   TGJU_DB_SERVER: localhost
+#   TGJU_DB_NAME: tgju
+#   TGJU_DB_USER: sa
+#   TGJU_DB_PASSWORD: ********
+#
+# Logging Configuration:
+#   level: INFO
+#   directory: logs
+#
+# ============================================================
+# ✓ Connection string built successfully
+#   (length: 156 characters)
+```
 
 ## Development 🛠️
-
-### Testing
-
-```python
-# Test safe_request
-response = safe_request('https://www.tgju.org')
-assert response is not None
-
-# Test symbol extraction
-symbols = get_df_of_symbols()
-assert not symbols.empty
-assert 'symbol_Fa' in symbols.columns
-```
 
 ### Code Style
 - PEP 8 compliant
@@ -258,6 +324,13 @@ MIT License - See LICENSE file for details
 
 ## Changelog 📋
 
+### v1.1.0 (2026-02-07)
+- ✨ Refactored configuration management to `config.py`
+- 📊 Enhanced logging with structured output
+- 🔐 Improved security: environment variables only, no hardcoded credentials
+- 📝 Better documentation and setup guide
+- 🛠️ Added configuration testing via `config.py`
+
 ### v1.0.0 (2026-02-07)
 - ✨ Initial release
 - 🔄 Refactored for Sonar compliance
@@ -269,11 +342,12 @@ MIT License - See LICENSE file for details
 
 For issues or questions:
 1. Check Troubleshooting section
-2. Review TGJU website for changes
-3. Open GitHub issue with detailed logs
+2. Run `python config.py` to verify configuration
+3. Review log output in `tgju_scraper.log`
+4. Open GitHub issue with detailed logs
 
 ---
 
 **Made with ❤️ by Ali Sadeghi Aghili**
 
-[GitHub](https://github.com/alisadeghiaghili) | [LinkedIn](https://linktr.ee/aliaghili)
+[GitHub](https://github.com/alisadeghiaghili) | [Website](https://linktr.ee/aliaghili)
