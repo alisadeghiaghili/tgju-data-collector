@@ -49,3 +49,6 @@ env/
 # Logs
 *.log
 logs/
+
+# MkDocs generated site
+site/

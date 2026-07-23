@@ -1,0 +1,85 @@
+site_name: TGJU Data Collector
+site_url: https://alisadeghiaghili.github.io/tgju-data-collector/
+site_description: Real-time market data scraper for TGJU.org with automated database persistence
+site_author: Ali Sadeghi Aghili
+
+repo_name: alisadeghiaghili/tgju-data-collector
+repo_url: https://github.com/alisadeghiaghili/tgju-data-collector
+edit_uri: edit/develop/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: amber
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: amber
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+    - toc.follow
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Welcome: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Configuration: getting-started/configuration.md
+    - Quick Start: getting-started/quickstart.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Project Structure: architecture/structure.md
+    - Data Flow: architecture/dataflow.md
+  - Core Modules:
+    - Symbol Discovery: modules/discovery.md
+    - OHLCV Collection: modules/ohlcv.md
+    - Backfill Engine: modules/backfill.md
+    - Storage Layer: modules/storage.md
+    - HTTP Client: modules/http-client.md
+    - Configuration: modules/config.md
+  - Data Reference:
+    - Database Schema: reference/schema.md
+    - Symbol Categories: reference/categories.md
+    - API Reference: reference/api.md
+  - Guides:
+    - Daily Workflow: guides/daily-workflow.md
+    - Initial Setup: guides/initial-setup.md
+    - Recovery from Downtime: guides/recovery.md
+  - Troubleshooting: troubleshooting.md
+  - Changelog: changelog.md
