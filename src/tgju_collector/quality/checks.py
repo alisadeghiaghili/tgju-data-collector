@@ -67,27 +67,41 @@ def check_price_bars(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
 def check_symbol_coverage(
     catalog: Iterable[str],
     stored: Iterable[str],
+    *,
+    history_capable: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """Compare catalog symbols against symbols present in storage.
 
     Args:
         catalog: Symbol ids discovered from the live catalog.
         stored: Symbol ids that have at least one stored row.
+        history_capable: Optional subset expected to have OHLCV history.
+            When provided, ``missing_history_capable`` is the actionable gap.
 
     Returns:
         dict[str, Any]: Report with ``catalog_size``, ``stored_size``,
-        ``missing_from_store`` (count), and the missing id list (capped).
+        ``missing_from_store`` (count), missing history-capable count,
+        and capped sample lists.
     """
     catalog_set = set(catalog)
     stored_set = set(stored)
     missing = sorted(catalog_set - stored_set)
-    return {
+
+    report: dict[str, Any] = {
         "catalog_size": len(catalog_set),
         "stored_size": len(stored_set),
         "missing_from_store": len(missing),
         "missing_sample": missing[:25],
         "orphans_in_store": len(stored_set - catalog_set),
     }
+
+    if history_capable is not None:
+        capable = set(history_capable)
+        missing_capable = sorted(capable - stored_set)
+        report["history_capable_size"] = len(capable)
+        report["missing_history_capable"] = len(missing_capable)
+        report["missing_history_capable_sample"] = missing_capable[:25]
+    return report
 
 
 def summarize_quality(price_report: Mapping[str, Any], coverage_report: Mapping[str, Any]) -> list[str]:
@@ -108,7 +122,12 @@ def summarize_quality(price_report: Mapping[str, Any], coverage_report: Mapping[
     null_rate = float(price_report.get("null_rate_close") or 0.0)
     if null_rate > 0.01:
         issues.append(f"null close rate {null_rate:.2%}")
-    if coverage_report.get("missing_from_store"):
+    if coverage_report.get("missing_history_capable"):
+        issues.append(
+            f"{coverage_report['missing_history_capable']} history-capable symbols "
+            f"have no stored bars"
+        )
+    elif coverage_report.get("missing_from_store") and "missing_history_capable" not in coverage_report:
         issues.append(
             f"{coverage_report['missing_from_store']} catalog symbols have no stored rows"
         )

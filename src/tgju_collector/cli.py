@@ -85,6 +85,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum lookback window in calendar days",
     )
 
+    p_trowel = sub.add_parser(
+        "trowel",
+        help="Full gap backfill across history-capable catalog symbols",
+    )
+    p_trowel.add_argument("--symbol", action="append", default=[], help="Limit to symbol (repeatable)")
+    p_trowel.add_argument(
+        "--max-days",
+        type=int,
+        default=730,
+        help="Maximum lookback window in calendar days",
+    )
+    p_trowel.add_argument(
+        "--all",
+        action="store_true",
+        help="Fetch even when no gaps detected (force refresh)",
+    )
+
     p_export = sub.add_parser("export", help="Export stored tables to CSV/Parquet/JSON")
     p_export.add_argument(
         "--table",
@@ -155,6 +172,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         if args.command == "sync-news":
             return _cmd_sync_news(settings, http, logger, count=args.count)
+        if args.command == "trowel":
+            return _cmd_trowel(
+                settings,
+                http,
+                logger,
+                symbols=args.symbol,
+                max_days=args.max_days,
+                only_gaps=not args.all,
+            )
         if args.command == "backfill":
             return _cmd_backfill(
                 settings,
@@ -308,6 +334,32 @@ def _cmd_export(
     else:
         path = export_symbols(engine, output, section=section)
     logger.info("exported %s to %s", table, path)
+    return 0
+
+
+def _cmd_trowel(
+    settings: Settings,
+    http: HttpClient,
+    logger,
+    *,
+    symbols: list[str],
+    max_days: int,
+    only_gaps: bool,
+) -> int:
+    from .pipelines import run_trowel
+
+    engine = _engine(settings)
+    targets = symbols or None
+    result = run_trowel(
+        http,
+        engine,
+        symbols=targets,
+        max_days=max_days,
+        only_gaps=only_gaps,
+    )
+    for message in result.messages:
+        logger.info(message)
+    logger.info("trowel_bars=%s", result.bars)
     return 0
 
 

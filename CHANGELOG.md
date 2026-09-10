@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.0 — 2026-09-10
+
+### Added
+- `tgju trowel`: full gap backfill across history-capable catalog symbols
+  (successor to AutoTrowel). Skips numeric HTML row ids; optional `--all`.
+- History-capability heuristics (`history_support.py`); `sync-history`
+  skips symbols that cannot have OHLCV.
+- Quality coverage now reports `missing_history_capable` instead of treating
+  every catalog row as needing bars.
+- `ops/weekly_job.bat` (catalog refresh + trowel + quality).
+
 ## v0.5.1 — 2026-09-10
 
 ### Fixed

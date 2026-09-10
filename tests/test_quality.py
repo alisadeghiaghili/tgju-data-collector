@@ -54,6 +54,29 @@ def test_coverage() -> None:
     assert report["orphans_in_store"] == 1
 
 
+def test_coverage_history_capable_subset() -> None:
+    report = check_symbol_coverage(
+        ["a", "b", "999999"],
+        ["a"],
+        history_capable=["a", "b"],
+    )
+    assert report["history_capable_size"] == 2
+    assert report["missing_history_capable"] == 1
+    assert report["missing_history_capable_sample"] == ["b"]
+    # numeric id is in catalog but not history-capable → not flagged
+    assert report["missing_from_store"] == 2
+
+
+def test_summarize_quality_prefers_history_capable() -> None:
+    price = check_price_bars([])
+    coverage = check_symbol_coverage(
+        ["a", "999999"], [], history_capable=["a"]
+    )
+    issues = summarize_quality(price, coverage)
+    assert any("history-capable" in i for i in issues)
+    assert not any("catalog symbols have no stored" in i for i in issues)
+
+
 def test_summarize_quality_flags_issues() -> None:
     price = check_price_bars(
         [{"symbol": "a", "trade_date": "d", "open": 1, "high": 0, "low": 2, "close": 1}]
