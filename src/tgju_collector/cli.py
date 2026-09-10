@@ -6,6 +6,10 @@ Examples:
     tgju sync-catalog
     tgju sync-live --pages home,crypto
     tgju sync-history --symbol sekee --days 14
+    tgju sync-news --count 30
+    tgju backfill --symbol sekee --max-days 365
+    tgju quality
+    tgju status
 """
 
 from __future__ import annotations
@@ -14,10 +18,13 @@ import argparse
 import sys
 from typing import Sequence
 
+from sqlalchemy import create_engine
+
 from . import __version__
 from .config import Settings
 from .http import HttpClient
 from .logging_setup import setup_logging
+from .storage.mssql import engine_kwargs_for_url, is_mssql_url, require_pyodbc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -58,7 +65,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Use all stored symbols when --symbol is omitted",
     )
 
-    p_status = sub.add_parser("status", help="Show row counts from the database")
+    p_news = sub.add_parser("sync-news", help="Fetch and store recent news items")
+    p_news.add_argument("--count", type=int, default=50, help="Number of news items to request")
+
+    p_backfill = sub.add_parser(
+        "backfill",
+        help="Fill missing trading-day gaps (skips Fridays/holidays)",
+    )
+    p_backfill.add_argument("--symbol", action="append", default=[], help="Symbol id (repeatable)")
+    p_backfill.add_argument(
+        "--from-catalog",
+        action="store_true",
+        help="Use all stored symbols when --symbol is omitted",
+    )
+    p_backfill.add_argument(
+        "--max-days",
+        type=int,
+        default=730,
+        help="Maximum lookback window in calendar days",
+    )
+
+    sub.add_parser("quality", help="Run data-quality checks on stored data")
+    sub.add_parser("status", help="Show row counts from the database")
 
     return parser
 
@@ -81,6 +109,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "status":
         return _cmd_status(settings, logger)
+    if args.command == "quality":
+        return _cmd_quality(settings, logger)
 
     with HttpClient(
         timeout=settings.http_timeout,
@@ -103,57 +133,73 @@ def main(argv: Sequence[str] | None = None) -> int:
                 days=args.days,
                 from_catalog=args.from_catalog,
             )
+        if args.command == "sync-news":
+            return _cmd_sync_news(settings, http, logger, count=args.count)
+        if args.command == "backfill":
+            return _cmd_backfill(
+                settings,
+                http,
+                logger,
+                symbols=args.symbol,
+                from_catalog=args.from_catalog,
+                max_days=args.max_days,
+            )
 
     parser.error(f"Unknown command: {args.command}")
     return 2
 
 
 def _engine(settings: Settings):
-    from sqlalchemy import create_engine
+    """Create a SQLAlchemy engine from settings, with MSSQL preflight checks.
 
+    Args:
+        settings: Application settings.
+
+    Returns:
+        sqlalchemy.engine.Engine: Configured engine with schema created.
+    """
     from .storage import create_all
 
-    engine = create_engine(settings.database_url, future=True)
+    if is_mssql_url(settings.database_url):
+        require_pyodbc()
+    engine = create_engine(settings.database_url, **engine_kwargs_for_url(settings.database_url))
     create_all(engine)
     return engine
 
 
+def _stored_symbols(engine) -> list[str]:
+    from sqlalchemy import select
+
+    from .storage import schema
+
+    with engine.connect() as conn:
+        return [row[0] for row in conn.execute(select(schema.symbols.c.symbol)).all()]
+
+
 def _cmd_sync_catalog(settings: Settings, http: HttpClient, logger, *, dry_run: bool) -> int:
-    from .discovery import CatalogBuilder
-    from .storage import Repository
+    from .pipelines import sync_catalog
 
-    builder = CatalogBuilder(http)
-    catalog = builder.build()
-    logger.info("Discovered %s symbols", len(catalog))
-
-    by_section: dict[str, int] = {}
-    for item in catalog:
-        by_section[str(item.product_section)] = by_section.get(str(item.product_section), 0) + 1
-    for section, count in sorted(by_section.items(), key=lambda kv: -kv[1]):
-        logger.info("  %-12s %s", section, count)
-
+    engine = _engine(settings) if not dry_run else None
+    # dry_run still needs an engine object for the pipeline signature; skip DB when dry
     if dry_run:
-        return 0
+        from sqlalchemy import create_engine as _ce
 
-    engine = _engine(settings)
-    repo = Repository(engine)
-    written = repo.upsert_symbols(catalog)
-    logger.info("Persisted %s symbols", written)
+        engine = _ce("sqlite:///:memory:", future=True)
+    result = sync_catalog(http, engine, dry_run=dry_run)
+    for message in result.messages:
+        logger.info(message)
+    logger.info("symbols=%s", result.symbols)
     return 0
 
 
 def _cmd_sync_live(settings: Settings, http: HttpClient, logger, *, pages: list[str] | None) -> int:
-    from .collectors import LiveCollector
-    from .storage import Repository
-
-    collector = LiveCollector(http)
-    snapshots = collector.collect(page_names=pages)
-    logger.info("Captured %s live snapshots", len(snapshots))
+    from .pipelines import sync_live
 
     engine = _engine(settings)
-    repo = Repository(engine)
-    inserted = repo.insert_live_snapshots(snapshots)
-    logger.info("Inserted %s new live snapshots", inserted)
+    result = sync_live(http, engine, pages=pages)
+    for message in result.messages:
+        logger.info(message)
+    logger.info("snapshots=%s", result.snapshots)
     return 0
 
 
@@ -166,30 +212,75 @@ def _cmd_sync_history(
     days: int,
     from_catalog: bool,
 ) -> int:
-    from .clients import HistoryClient
-    from .storage import Repository
+    from .pipelines import sync_history
 
     engine = _engine(settings)
-    repo = Repository(engine)
-
     targets = list(symbols)
     if not targets and from_catalog:
-        targets = [row["symbol"] for row in repo.list_symbols()]
+        targets = _stored_symbols(engine)
     if not targets:
         logger.error("Provide --symbol or --from-catalog")
         return 2
 
-    client = HistoryClient(http)
+    result = sync_history(http, engine, symbols=targets, days=days)
+    for message in result.messages:
+        logger.info(message)
+    logger.info("bars=%s", result.bars)
+    return 0
+
+
+def _cmd_sync_news(settings: Settings, http: HttpClient, logger, *, count: int) -> int:
+    from .pipelines import sync_news
+
+    engine = _engine(settings)
+    result = sync_news(http, engine, count=count)
+    for message in result.messages:
+        logger.info(message)
+    logger.info("news=%s", result.news)
+    return 0
+
+
+def _cmd_backfill(
+    settings: Settings,
+    http: HttpClient,
+    logger,
+    *,
+    symbols: list[str],
+    from_catalog: bool,
+    max_days: int,
+) -> int:
+    from .pipelines import backfill_symbol
+
+    engine = _engine(settings)
+    targets = list(symbols)
+    if not targets and from_catalog:
+        targets = _stored_symbols(engine)
+    if not targets:
+        logger.error("Provide --symbol or --from-catalog")
+        return 2
+
     total = 0
     for symbol in targets:
-        try:
-            bars = client.fetch_daily(symbol, days=days)
-        except Exception as exc:
-            logger.warning("History fetch failed for %s: %s", symbol, exc)
-            continue
-        total += repo.upsert_price_bars(bars)
-        logger.info("%s: %s bars", symbol, len(bars))
-    logger.info("Total bars upserted: %s", total)
+        result = backfill_symbol(http, engine, symbol, max_days=max_days)
+        for message in result.messages:
+            logger.info(message)
+        total += result.bars
+    logger.info("total_backfilled=%s", total)
+    return 0
+
+
+def _cmd_quality(settings: Settings, logger) -> int:
+    from .pipelines import run_quality_report
+
+    engine = _engine(settings)
+    report = run_quality_report(engine)
+    logger.info("price: %s", report["price"])
+    logger.info("coverage: %s", report["coverage"])
+    if report["issues"]:
+        for issue in report["issues"]:
+            logger.warning("ISSUE %s", issue)
+        return 1
+    logger.info("quality: OK")
     return 0
 
 
