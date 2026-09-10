@@ -25,6 +25,12 @@ def test_api_type_forces_capable() -> None:
     assert is_history_capable("zzz_custom", meta={"api_type": "طلا و سکه"}) is True
 
 
+def test_ui_chrome_and_hyphen_commodities_excluded() -> None:
+    assert is_history_capable("cat_title_line") is False
+    assert is_history_capable("commodities-canola-futures-contracts") is False
+    assert is_history_capable("commodity_corn") is True
+
+
 def test_filter_list_of_dicts() -> None:
     items = [
         {"symbol": "sekee", "meta": {}},
