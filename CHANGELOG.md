@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.5.1 — 2026-09-10
+
+### Fixed
+- History parser no longer crashes on `null` OHLC ticks from the API.
+- Open/close are clamped into the high–low range after inverted low/high
+  swaps, so dirty ticks persist instead of failing the whole symbol.
+- Added `ops/audit_integration.py` (catalog-wide consistency audit).
+
 ## v0.5.0 — 2026-09-10
 
 ### Removed
