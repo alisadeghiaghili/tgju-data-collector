@@ -121,7 +121,18 @@ class Repository:
         if not bars:
             return 0
 
-        records = [bar.to_record() for bar in bars]
+        # Last write wins when the API maps multiple timestamps to one trade date.
+        deduped: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for bar in bars:
+            record = bar.to_record()
+            if isinstance(record["scraped_at"], str):
+                record["scraped_at"] = datetime.fromisoformat(record["scraped_at"])
+            key = (record["symbol"], record["trade_date"], record["timeframe"])
+            deduped[key] = record
+
+        records = list(deduped.values())
+        symbols_in_batch = {record["symbol"] for record in records}
+
         with self.engine.begin() as conn:
             existing_keys = {
                 (row.symbol, row.trade_date, row.timeframe)
@@ -130,33 +141,40 @@ class Repository:
                         schema.price_bars.c.symbol,
                         schema.price_bars.c.trade_date,
                         schema.price_bars.c.timeframe,
-                    )
+                    ).where(schema.price_bars.c.symbol.in_(symbols_in_batch))
                 ).all()
             }
+
+            to_insert: list[dict[str, Any]] = []
+            to_update: list[dict[str, Any]] = []
             for record in records:
                 key = (record["symbol"], record["trade_date"], record["timeframe"])
-                # scraped_at may be string; ensure datetime for SQLAlchemy
-                if isinstance(record["scraped_at"], str):
-                    record["scraped_at"] = datetime.fromisoformat(record["scraped_at"])
                 if key in existing_keys:
-                    conn.execute(
-                        schema.price_bars.update()
-                        .where(
-                            (schema.price_bars.c.symbol == record["symbol"])
-                            & (schema.price_bars.c.trade_date == record["trade_date"])
-                            & (schema.price_bars.c.timeframe == record["timeframe"])
-                        )
-                        .values(
-                            open=record["open"],
-                            high=record["high"],
-                            low=record["low"],
-                            close=record["close"],
-                            volume=record["volume"],
-                            scraped_at=record["scraped_at"],
-                        )
-                    )
+                    to_update.append(record)
                 else:
-                    conn.execute(schema.price_bars.insert().values(**record))
+                    to_insert.append(record)
+                    existing_keys.add(key)
+
+            if to_insert:
+                conn.execute(schema.price_bars.insert(), to_insert)
+
+            for record in to_update:
+                conn.execute(
+                    schema.price_bars.update()
+                    .where(
+                        (schema.price_bars.c.symbol == record["symbol"])
+                        & (schema.price_bars.c.trade_date == record["trade_date"])
+                        & (schema.price_bars.c.timeframe == record["timeframe"])
+                    )
+                    .values(
+                        open=record["open"],
+                        high=record["high"],
+                        low=record["low"],
+                        close=record["close"],
+                        volume=record["volume"],
+                        scraped_at=record["scraped_at"],
+                    )
+                )
         return len(records)
 
     def existing_trade_dates(self, symbol: str) -> set[str]:

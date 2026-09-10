@@ -77,7 +77,21 @@ class HistoryClient:
                 "to": to_unix(end, end_of_day=True),
             },
         )
-        return parse_history_payload(symbol=symbol, payload=payload, scraped_at=utc_now())
+        # Catalog symbols are lowercase; keep storage keys consistent.
+        bars = parse_history_payload(
+            symbol=symbol.lower(), payload=payload, scraped_at=utc_now()
+        )
+        # The API often ignores from/to and returns full history; filter locally.
+        filtered = [bar for bar in bars if start <= bar.trade_date <= end]
+        if bars and not filtered:
+            logger.debug(
+                "History API returned %s bars outside %s..%s for %s",
+                len(bars),
+                start,
+                end,
+                symbol,
+            )
+        return filtered
 
 
 def parse_history_payload(
@@ -127,6 +141,7 @@ def parse_history_payload(
             )
 
     bars: list[PriceBar] = []
+    skipped = 0
     for i, ts in enumerate(times):
         trade_date = trade_date_from_unix(ts)
         open_ = float(opens[i]) if opens else float(closes[i])
@@ -134,17 +149,30 @@ def parse_history_payload(
         low = float(lows[i]) if lows else open_
         close = float(closes[i])
         volume = float(volumes[i]) if volumes and i < len(volumes) else None
-        bars.append(
-            PriceBar(
-                symbol=symbol,
-                trade_date=trade_date,
-                open=open_,
-                high=high,
-                low=low,
-                close=close,
-                volume=volume,
-                scraped_at=scraped_at,
+
+        # TGJU occasionally returns inverted low/high; keep the bar when possible.
+        if low > high:
+            low, high = high, low
+
+        try:
+            bars.append(
+                PriceBar(
+                    symbol=symbol,
+                    trade_date=trade_date,
+                    open=open_,
+                    high=high,
+                    low=low,
+                    close=close,
+                    volume=volume,
+                    scraped_at=scraped_at,
+                )
             )
-        )
+        except ValueError:
+            skipped += 1
+            continue
+
+    if skipped:
+        logger.warning("Skipped %s invalid bars for %s", skipped, symbol)
+
     bars.sort(key=lambda b: b.trade_date)
     return bars

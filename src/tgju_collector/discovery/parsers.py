@@ -112,14 +112,19 @@ def parse_news_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
         list[dict[str, Any]]: Normalized news records.
 
     Examples:
-        >>> parse_news_payload({"response": {"news": []}})
+        >>> parse_news_payload({"response": {"items": {"data": []}}})
         []
     """
     response = payload.get("response") if isinstance(payload, dict) else None
     if not isinstance(response, dict):
         return []
 
-    items = response.get("news") or response.get("list") or response.get("items") or []
+    items = response.get("items")
+    # Live API shape: response.items.data = [...]
+    if isinstance(items, dict):
+        items = items.get("data") or items.get("news") or []
+    if items is None:
+        items = response.get("news") or response.get("list") or []
     if not isinstance(items, list):
         return []
 
@@ -131,6 +136,7 @@ def parse_news_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
         title = str(item.get("title") or item.get("name") or "").strip()
         if not news_id or not title:
             continue
+        summary = str(item.get("summary") or item.get("lead") or item.get("desc") or item.get("body") or "")
         normalized.append(
             {
                 "news_id": news_id,
@@ -138,7 +144,7 @@ def parse_news_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "category": str(item.get("category") or item.get("category_title") or ""),
                 "url": str(item.get("url") or item.get("link") or ""),
                 "published_at": item.get("publish_at") or item.get("date") or item.get("created_at"),
-                "body_excerpt": str(item.get("lead") or item.get("desc") or item.get("body") or "")[:500],
+                "body_excerpt": summary[:500],
             }
         )
     return normalized
