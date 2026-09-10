@@ -144,15 +144,46 @@ def parse_history_payload(
     skipped = 0
     for i, ts in enumerate(times):
         trade_date = trade_date_from_unix(ts)
-        open_ = float(opens[i]) if opens else float(closes[i])
-        high = float(highs[i]) if highs else open_
-        low = float(lows[i]) if lows else open_
-        close = float(closes[i])
-        volume = float(volumes[i]) if volumes and i < len(volumes) else None
 
-        # TGJU occasionally returns inverted low/high; keep the bar when possible.
+        def _num(series: list, fallback: float | None) -> float | None:
+            if not series or i >= len(series):
+                return fallback
+            value = series[i]
+            if value is None:
+                return fallback
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return fallback
+
+        close = _num(closes, None)
+        open_ = _num(opens, close)
+        high = _num(highs, open_)
+        low = _num(lows, open_)
+        volume = _num(volumes, None)
+
+        if close is None:
+            skipped += 1
+            continue
+        if open_ is None:
+            open_ = close
+        if high is None:
+            high = max(open_, close)
+        if low is None:
+            low = min(open_, close)
+
+        # TGJU sometimes returns inverted low/high; keep the bar when possible.
         if low > high:
             low, high = high, low
+        # Clamp open/close into [low, high] so dirty ticks still persist.
+        if open_ < low:
+            low = open_
+        if open_ > high:
+            high = open_
+        if close < low:
+            low = close
+        if close > high:
+            high = close
 
         try:
             bars.append(
