@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.1 — 2026-09-10
+
+### Fixed
+- Exclude table chrome (`cat_title*`) and hyphenated `commodities-*` ids from
+  history-capable targets (live tables exist, OHLCV does not).
+- Quality coverage no longer treats raw `meta_json` blobs as API types.
+
 ## v0.6.0 — 2026-09-10
 
 ### Added
