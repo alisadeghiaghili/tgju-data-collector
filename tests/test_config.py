@@ -16,6 +16,9 @@ def test_defaults(monkeypatch) -> None:
     settings = Settings.from_env(load_dotenv=False)
     assert settings.http_timeout == 30.0
     assert settings.http_max_retries == 3
+    assert settings.request_delay_min >= 1.0
+    assert "Mozilla" in settings.user_agent
+    assert "tgju-collector" not in settings.user_agent
     assert settings.market_timezone == "Asia/Tehran"
     assert settings.database_url.startswith("sqlite")
 

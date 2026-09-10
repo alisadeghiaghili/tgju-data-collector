@@ -14,6 +14,7 @@ Examples:
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Protocol
 
 from ..models import ProductSection, Symbol, SymbolSource
@@ -67,10 +68,12 @@ class CatalogBuilder:
         *,
         section_pages: dict[str, str] | None = None,
         search_queries: tuple[str, ...] = DEFAULT_SEARCH_QUERIES,
+        search_pause_sec: float = 0.8,
     ) -> None:
         self.client = client
         self.section_pages = dict(section_pages or SECTION_PAGE_URLS)
         self.search_queries = search_queries
+        self.search_pause_sec = search_pause_sec
 
     def build(self) -> list[Symbol]:
         """Build the combined catalog.
@@ -123,6 +126,10 @@ class CatalogBuilder:
             except Exception as exc:
                 logger.warning("Search query %r failed: %s", query, exc)
                 continue
+            # Extra pause between search expansions; the search endpoint is
+            # chattier than page fetches and deserves a wider berth.
+            if self.search_pause_sec > 0:
+                time.sleep(self.search_pause_sec)
             for item in payload if isinstance(payload, list) else []:
                 if not isinstance(item, dict):
                     continue

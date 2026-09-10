@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.4.0 — 2026-09-10
+
+### Changed
+- Default HTTP profile is browser-like: desktop Chrome User-Agent (no package
+  token), Accept-Language `fa-IR`, Referer `https://www.tgju.org/`.
+- Default inter-request delay raised to 1.2–2.8s jittered.
+- Catalog search expansion sleeps an extra 0.8s between queries.
+- Removed one-off discovery/probe/smoke scripts from the repository.
+
+### Added
+- `ops/daily_job.bat` and `ops/README.md` for Task Scheduler + rate guidance.
+
 ## v0.3.0 — 2026-09-10
 
 ### Added
