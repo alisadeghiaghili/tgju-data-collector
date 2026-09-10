@@ -26,7 +26,7 @@ _KEYWORD_RULES: tuple[tuple[tuple[str, ...], ProductSection], ...] = (
     (("commodit", "wheat", "corn", "soybean", "cattle", "lumber", "coffee", "cocoa"), ProductSection.COMMODITY),
     (("gold_", "geram", "mesghal", "sekee", "sekeb", "coin_", "blubber", "ayar", "ime_fund", "melted"), ProductSection.GOLD_COIN),
     (("price_", "dollar", "euro", "nima", "sana", "dirham", "pound", "sterling", "yuan", "lira", "yen"), ProductSection.CURRENCY),
-    (("gc", "bourse", "tedpix", "stock", "fund_", "bond", "index_", "retail_"), ProductSection.BOURSE),
+    (("bourse", "tedpix", "stock", "fund_", "bond", "index_"), ProductSection.BOURSE),
 )
 
 _LABEL_RULES: tuple[tuple[tuple[str, ...], ProductSection], ...] = (
@@ -63,7 +63,21 @@ def classify_symbol(
         >>> classify_symbol("unknown_symbol")
         <ProductSection.OTHER: 'other'>
     """
+    if not symbol or not symbol.strip():
+        return ProductSection.OTHER
+
     lowered = symbol.lower()
+
+    # Ambiguous prefixes resolved by label before generic keyword rules.
+    if lowered.startswith("retail_"):
+        return ProductSection.GOLD_COIN
+    if lowered.startswith("gc") and lowered[2:3].isdigit():
+        # gc14–gc19 are coin series; gc30 is the bourse index.
+        label_blob = " ".join(labels or []).lower()
+        if any(token in label_blob for token in ("سکه", "coin")):
+            return ProductSection.GOLD_COIN
+        if any(token in label_blob for token in ("بورس", "شاخص", "bourse")):
+            return ProductSection.BOURSE
 
     for keywords, section in _KEYWORD_RULES:
         if any(keyword in lowered for keyword in keywords):

@@ -42,19 +42,27 @@ def test_parse_profile_links() -> None:
 def test_parse_news_payload() -> None:
     payload = {
         "response": {
-            "news": [
-                {"id": 10, "title": "خبر اول", "category": "قیمت‌ها", "url": "https://x", "lead": "خلاصه"},
-                {"id": 11, "title": "خبر دوم"},
-                {"id": 12},  # missing title → skipped
-            ]
+            "items": {
+                "data": [
+                    {"id": 10, "title": "خبر اول", "summary": "خلاصه"},
+                    {"id": 11, "title": "خبر دوم"},
+                    {"id": 12},  # missing title → skipped
+                ]
+            }
         }
     }
     items = parse_news_payload(payload)
     assert len(items) == 2
     assert items[0]["news_id"] == "10"
     assert items[0]["title"] == "خبر اول"
+    assert items[0]["body_excerpt"] == "خلاصه"
+
+
+def test_parse_news_payload_legacy_list() -> None:
+    payload = {"response": {"news": [{"id": 1, "title": "x"}]}}
+    assert parse_news_payload(payload)[0]["news_id"] == "1"
 
 
 def test_parse_news_payload_empty() -> None:
-    assert parse_news_payload({"response": {"news": []}}) == []
+    assert parse_news_payload({"response": {"items": {"data": []}}}) == []
     assert parse_news_payload({}) == []

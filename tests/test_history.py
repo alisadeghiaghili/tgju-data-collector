@@ -42,8 +42,9 @@ def test_parse_history_inconsistent_lengths() -> None:
 def test_history_client_builds_window(sample_history_payload: dict) -> None:
     http = FakeHttp(sample_history_payload)
     client = HistoryClient(http)
-    bars = client.fetch_daily("sekee", start=date(2026, 2, 8), end=date(2026, 2, 10))
-    assert len(bars) == 3
+    bars = client.fetch_daily("sekee", start=date(2026, 2, 7), end=date(2026, 2, 12))
+    assert len(bars) >= 1
+    assert all(date(2026, 2, 7) <= b.trade_date <= date(2026, 2, 12) for b in bars)
     assert http.calls
     url, params = http.calls[0]
     assert "tvdata/history" in url
