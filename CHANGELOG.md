@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.2.0 — 2026-02-10
+
+### Added
+- Iranian trading calendar (`MarketCalendar`): Fridays closed, static holiday
+  set for 2025–2027, extra ad-hoc closed dates.
+- Gap detection and backfill now skip non-trading days.
+- News collector and `sync-news` pipeline/CLI command.
+- Data-quality checks (OHLC consistency, null rate, duplicate keys,
+  catalog coverage) and `tgju quality` command (exit 1 on issues).
+- `tgju backfill` CLI command with `--max-days` and `--from-catalog`.
+- SQL Server helpers: `is_mssql_url`, `require_pyodbc`,
+  `engine_kwargs_for_url` (pool pre-ping + fast_executemany).
+- GitHub Actions CI: ruff + pytest on Python 3.11/3.12.
+
+### Changed
+- `missing_dates_for_symbol` is trading-day aware by default.
+- CLI engine creation validates optional pyodbc for MSSQL URLs.
+- Version bumped to 0.2.0.
+
 ## v0.1.0 — 2026-02-10
 
 ### Added
@@ -16,7 +35,7 @@
 - Gap detection helper and backfill pipeline skeleton.
 - HTTP client with exception-typed timeouts, exponential backoff, and
   polite rate limiting.
-- Offline unit test suite (56 tests) with fixtures and fakes.
+- Offline unit test suite with fixtures and fakes.
 - CLI: `sync-catalog`, `sync-live`, `sync-history`, `status`.
 - `DESIGN.md` architecture and source-surface map.
 

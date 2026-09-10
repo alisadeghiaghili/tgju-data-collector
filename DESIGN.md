@@ -137,9 +137,9 @@ Catalog is built from market-row IDs + search API + newsearch batches.
 
 | Version | Scope | PR |
 |---------|-------|----|
-| **v0.1.0** | Package layout, config, HTTP, models, sqlite schema, catalog discovery, live snapshot, history client, tests, CLI skeleton | PR#1 |
-| **v0.2.0** | Full multi-section catalog sync, news collector, backfill gap detection (market-day aware), MSSQL adapter | PR#2 |
-| **v0.3.0** | Scheduler examples, data quality checks, export tools, production README | PR#3 |
+| **v0.1.0** | Package layout, config, HTTP, models, sqlite schema, catalog discovery, live snapshot, history client, tests, CLI skeleton | PR#1 (done) |
+| **v0.2.0** | Trading calendar, market-day backfill, news collector, data-quality checks, MSSQL helpers, CI | PR#2 (done) |
+| **v0.3.0** | Export tools (CSV/Parquet), scheduler examples, production hardening, legacy removal | PR#3 |
 
 ## 8. TDD Policy
 
