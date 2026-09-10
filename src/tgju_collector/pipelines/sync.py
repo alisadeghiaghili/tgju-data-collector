@@ -18,13 +18,17 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Sequence
 
+from sqlalchemy import select
 from sqlalchemy.engine import Engine
 
+from ..calendar.trading import MarketCalendar
 from ..clients.history import HistoryClient
 from ..collectors.live import LiveCollector
-from ..dates import date_range
+from ..collectors.news import NewsCollector
 from ..discovery.catalog import CatalogBuilder
 from ..models import PriceBar
+from ..quality.checks import check_price_bars, check_symbol_coverage, summarize_quality
+from ..storage import schema
 from ..storage.repository import Repository
 
 logger = logging.getLogger("tgju_collector.pipelines")
@@ -38,12 +42,14 @@ class SyncResult:
         symbols: Symbols processed or discovered.
         snapshots: Live snapshots written.
         bars: Price bars written.
+        news: News items written.
         messages: Optional human-readable notes.
     """
 
     symbols: int = 0
     snapshots: int = 0
     bars: int = 0
+    news: int = 0
     messages: list[str] = field(default_factory=list)
 
 
@@ -118,27 +124,75 @@ def sync_history(
     return SyncResult(bars=total, messages=[f"upserted {total} bars"])
 
 
+def sync_news(http: Any, engine: Engine, *, count: int = 50) -> SyncResult:
+    """Fetch recent news items and persist them.
+
+    Args:
+        http: HTTP client with ``get_json``.
+        engine: SQLAlchemy engine.
+        count: Number of items to request.
+
+    Returns:
+        SyncResult: News write counts.
+    """
+    items = NewsCollector(http).fetch(count=count)
+    repo = Repository(engine)
+    written = repo.upsert_news(items)
+    return SyncResult(news=written, messages=[f"news upserted {written}"])
+
+
 def missing_dates_for_symbol(
     engine: Engine,
     symbol: str,
     *,
     start: date,
     end: date,
+    calendar: MarketCalendar | None = None,
 ) -> list[date]:
-    """Return calendar dates in ``[start, end]`` not yet stored for a symbol.
+    """Return market trading days in ``[start, end]`` not yet stored.
+
+    Fridays and known Iranian holidays are excluded so backfill does not
+    waste API calls on non-trading days.
 
     Args:
         engine: SQLAlchemy engine.
         symbol: Market symbol id.
         start: Inclusive range start.
         end: Inclusive range end.
+        calendar: Optional trading calendar; defaults to :class:`MarketCalendar`.
 
     Returns:
-        list[date]: Missing dates, ordered ascending.
+        list[date]: Missing trading dates, ordered ascending.
     """
     repo = Repository(engine)
     existing = repo.existing_trade_dates(symbol)
-    return [d for d in date_range(start, end) if d.isoformat() not in existing]
+    cal = calendar or MarketCalendar()
+    return cal.missing_trading_days(start, end, existing)
+
+
+def _collapse_ranges(days: Sequence[date]) -> list[tuple[date, date]]:
+    """Collapse consecutive dates into inclusive ranges.
+
+    Args:
+        days: Ordered unique dates.
+
+    Returns:
+        list[tuple[date, date]]: ``(start, end)`` inclusive ranges.
+    """
+    if not days:
+        return []
+    ranges: list[tuple[date, date]] = []
+    range_start = days[0]
+    prev = days[0]
+    for current in days[1:]:
+        if (current - prev).days == 1:
+            prev = current
+            continue
+        ranges.append((range_start, prev))
+        range_start = current
+        prev = current
+    ranges.append((range_start, prev))
+    return ranges
 
 
 def backfill_symbol(
@@ -147,6 +201,7 @@ def backfill_symbol(
     symbol: str,
     *,
     max_days: int = 730,
+    calendar: MarketCalendar | None = None,
 ) -> SyncResult:
     """Backfill missing daily bars for one symbol over the lookback window.
 
@@ -155,41 +210,59 @@ def backfill_symbol(
         engine: SQLAlchemy engine.
         symbol: Market symbol id.
         max_days: Maximum lookback from today.
+        calendar: Optional trading calendar.
 
     Returns:
         SyncResult: Number of bars written for gaps.
     """
     end = date.today()
     start = end - timedelta(days=max_days)
-    missing = missing_dates_for_symbol(engine, symbol, start=start, end=end)
+    missing = missing_dates_for_symbol(
+        engine, symbol, start=start, end=end, calendar=calendar
+    )
     if not missing:
         return SyncResult(messages=[f"{symbol}: no gaps"])
-
-    # Collapse consecutive missing dates into ranges for fewer API calls.
-    ranges: list[tuple[date, date]] = []
-    range_start = missing[0]
-    prev = missing[0]
-    for current in missing[1:]:
-        if (current - prev).days == 1:
-            prev = current
-            continue
-        ranges.append((range_start, prev))
-        range_start = current
-        prev = current
-    ranges.append((range_start, prev))
 
     client = HistoryClient(http)
     repo = Repository(engine)
     written = 0
-    for gap_start, gap_end in ranges:
+    for gap_start, gap_end in _collapse_ranges(missing):
         try:
             bars = client.fetch_daily(symbol, start=gap_start, end=gap_end)
         except Exception as exc:
-            logger.warning("backfill failed for %s %s..%s: %s", symbol, gap_start, gap_end, exc)
+            logger.warning(
+                "backfill failed for %s %s..%s: %s", symbol, gap_start, gap_end, exc
+            )
             continue
-        # Keep only bars inside the requested gap window.
         filtered: list[PriceBar] = [
             b for b in bars if gap_start <= b.trade_date <= gap_end
         ]
         written += repo.upsert_price_bars(filtered)
     return SyncResult(bars=written, messages=[f"{symbol}: backfilled {written} bars"])
+
+
+def run_quality_report(engine: Engine) -> dict[str, Any]:
+    """Compute data-quality metrics over stored price bars and catalog coverage.
+
+    Args:
+        engine: SQLAlchemy engine.
+
+    Returns:
+        dict[str, Any]: Keys ``price``, ``coverage``, ``issues``.
+    """
+    with engine.connect() as conn:
+        bar_rows = [
+            dict(row._mapping)
+            for row in conn.execute(select(schema.price_bars)).all()
+        ]
+        stored_symbols = {row["symbol"] for row in bar_rows}
+        catalog_rows = [
+            dict(row._mapping)
+            for row in conn.execute(select(schema.symbols.c.symbol)).all()
+        ]
+        catalog_symbols = {row["symbol"] for row in catalog_rows}
+
+    price_report = check_price_bars(bar_rows)
+    coverage_report = check_symbol_coverage(catalog_symbols, stored_symbols)
+    issues = summarize_quality(price_report, coverage_report)
+    return {"price": price_report, "coverage": coverage_report, "issues": issues}
