@@ -3,7 +3,7 @@
 Section-aware market data collector for [TGJU.org](https://www.tgju.org)
 (gold, currency, crypto, energy, metals, commodities, bourse, news).
 
-**Current version: v0.5.1**
+**Current version: v0.6.0**
 
 ## What it collects
 
@@ -53,6 +53,10 @@ tgju sync-news --count 30
 # Backfill gaps (skips Fridays and Iranian holidays)
 tgju backfill --symbol sekee --max-days 365
 tgju backfill --from-catalog
+
+# Full gap backfill across history-capable symbols (trowel)
+tgju trowel --max-days 365
+tgju trowel --symbol sekee --all
 
 # Data quality (exit code 1 if issues found)
 tgju quality

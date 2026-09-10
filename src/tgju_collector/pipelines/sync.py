@@ -26,6 +26,7 @@ from ..clients.history import HistoryClient
 from ..collectors.live import LiveCollector
 from ..collectors.news import NewsCollector
 from ..discovery.catalog import CatalogBuilder
+from ..history_support import is_history_capable
 from ..models import PriceBar
 from ..quality.checks import check_price_bars, check_symbol_coverage, summarize_quality
 from ..storage import schema
@@ -114,14 +115,21 @@ def sync_history(
     client = HistoryClient(http)
     repo = Repository(engine)
     total = 0
+    skipped = 0
     for symbol in symbols:
+        if not is_history_capable(symbol):
+            skipped += 1
+            continue
         try:
             bars = client.fetch_daily(symbol, days=days)
         except Exception as exc:
             logger.warning("history failed for %s: %s", symbol, exc)
             continue
         total += repo.upsert_price_bars(bars)
-    return SyncResult(bars=total, messages=[f"upserted {total} bars"])
+    messages = [f"upserted {total} bars"]
+    if skipped:
+        messages.append(f"skipped {skipped} non-history symbols")
+    return SyncResult(bars=total, messages=messages)
 
 
 def sync_news(http: Any, engine: Engine, *, count: int = 50) -> SyncResult:
@@ -244,6 +252,9 @@ def backfill_symbol(
 def run_quality_report(engine: Engine) -> dict[str, Any]:
     """Compute data-quality metrics over stored price bars and catalog coverage.
 
+    Coverage is evaluated against history-capable symbols so HTML-only
+    numeric row ids do not count as missing OHLCV data.
+
     Args:
         engine: SQLAlchemy engine.
 
@@ -258,11 +269,106 @@ def run_quality_report(engine: Engine) -> dict[str, Any]:
         stored_symbols = {row["symbol"] for row in bar_rows}
         catalog_rows = [
             dict(row._mapping)
-            for row in conn.execute(select(schema.symbols.c.symbol)).all()
+            for row in conn.execute(select(schema.symbols)).all()
         ]
-        catalog_symbols = {row["symbol"] for row in catalog_rows}
+
+    catalog_symbols = {row["symbol"] for row in catalog_rows}
+    capable = {
+        row["symbol"]
+        for row in catalog_rows
+        if is_history_capable(
+            row["symbol"],
+            api_type=None,
+            meta={"api_type": row.get("meta_json") or ""},
+        )
+        or is_history_capable(row["symbol"])
+    }
 
     price_report = check_price_bars(bar_rows)
-    coverage_report = check_symbol_coverage(catalog_symbols, stored_symbols)
+    coverage_report = check_symbol_coverage(
+        catalog_symbols, stored_symbols, history_capable=capable
+    )
     issues = summarize_quality(price_report, coverage_report)
-    return {"price": price_report, "coverage": coverage_report, "issues": issues}
+    return {
+        "price": price_report,
+        "coverage": coverage_report,
+        "issues": issues,
+        "history_capable_size": len(capable),
+    }
+
+
+def run_trowel(
+    http: Any,
+    engine: Engine,
+    *,
+    symbols: Sequence[str] | None = None,
+    max_days: int = 730,
+    only_gaps: bool = True,
+) -> SyncResult:
+    """Full backfill pass (AutoTrowel successor) over history-capable symbols.
+
+    For each symbol:
+      1. Detect missing trading days in the lookback window.
+      2. Collapse gaps into ranges.
+      3. Fetch and upsert those ranges only.
+
+    Args:
+        http: HTTP client with ``get_json``.
+        engine: SQLAlchemy engine.
+        symbols: Optional explicit symbol list. Defaults to all catalog
+            symbols that pass the history-capable filter.
+        max_days: Maximum lookback from today.
+        only_gaps: When True (default), skip symbols with no gaps.
+
+    Returns:
+        SyncResult: Aggregate bar counts and per-symbol notes.
+    """
+    from datetime import date, timedelta
+
+    repo = Repository(engine)
+
+    if symbols is None:
+        with engine.connect() as conn:
+            catalog_rows = [
+                dict(row._mapping)
+                for row in conn.execute(select(schema.symbols)).all()
+            ]
+        targets = [
+            row["symbol"]
+            for row in catalog_rows
+            if is_history_capable(row["symbol"])
+        ]
+    else:
+        targets = [s for s in symbols if is_history_capable(s)]
+
+    end = date.today()
+    start = end - timedelta(days=max_days)
+    cal = MarketCalendar()
+
+    total_bars = 0
+    processed = 0
+    skipped_no_gap = 0
+    notes: list[str] = []
+
+    for symbol in targets:
+        missing = missing_dates_for_symbol(
+            engine, symbol, start=start, end=end, calendar=cal
+        )
+        if only_gaps and not missing:
+            skipped_no_gap += 1
+            continue
+
+        result = backfill_symbol(http, engine, symbol, max_days=max_days, calendar=cal)
+        total_bars += result.bars
+        processed += 1
+        notes.append(f"{symbol}: {result.bars} bars")
+        logger.info("trowel %s → %s bars", symbol, result.bars)
+
+    messages = [
+        f"trowel targets={len(targets)} processed={processed} "
+        f"no_gap={skipped_no_gap} bars={total_bars}"
+    ]
+    messages.extend(notes[:20])
+    if len(notes) > 20:
+        messages.append(f"... {len(notes) - 20} more symbols")
+    return SyncResult(bars=total_bars, messages=messages)
