@@ -297,13 +297,14 @@ def run_trowel(
     symbols: Sequence[str] | None = None,
     max_days: int = 730,
     only_gaps: bool = True,
+    min_coverage_ratio: float = 0.75,
 ) -> SyncResult:
     """Full backfill pass (AutoTrowel successor) over history-capable symbols.
 
     For each symbol:
       1. Detect missing trading days in the lookback window.
-      2. Collapse gaps into ranges.
-      3. Fetch and upsert those ranges only.
+      2. Skip when coverage already exceeds ``min_coverage_ratio``.
+      3. Collapse remaining gaps into ranges and fetch only those.
 
     Args:
         http: HTTP client with ``get_json``.
@@ -312,6 +313,8 @@ def run_trowel(
             symbols that pass the history-capable filter.
         max_days: Maximum lookback from today.
         only_gaps: When True (default), skip symbols with no gaps.
+        min_coverage_ratio: Skip when stored trading days / expected
+            trading days in the window is at least this fraction.
 
     Returns:
         SyncResult: Aggregate bar counts and per-symbol notes.
@@ -337,10 +340,12 @@ def run_trowel(
     end = date.today()
     start = end - timedelta(days=max_days)
     cal = MarketCalendar()
+    expected = cal.trading_days(start, end)
 
     total_bars = 0
     processed = 0
     skipped_no_gap = 0
+    skipped_dense = 0
     notes: list[str] = []
 
     for symbol in targets:
@@ -351,6 +356,14 @@ def run_trowel(
             skipped_no_gap += 1
             continue
 
+        if expected and min_coverage_ratio > 0:
+            present = repo.existing_trade_dates(symbol)
+            present_in_window = sum(1 for d in expected if d.isoformat() in present)
+            ratio = present_in_window / len(expected)
+            if ratio >= min_coverage_ratio:
+                skipped_dense += 1
+                continue
+
         result = backfill_symbol(http, engine, symbol, max_days=max_days, calendar=cal)
         total_bars += result.bars
         processed += 1
@@ -359,7 +372,7 @@ def run_trowel(
 
     messages = [
         f"trowel targets={len(targets)} processed={processed} "
-        f"no_gap={skipped_no_gap} bars={total_bars}"
+        f"no_gap={skipped_no_gap} dense={skipped_dense} bars={total_bars}"
     ]
     messages.extend(notes[:20])
     if len(notes) > 20:

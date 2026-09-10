@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.2 — 2026-09-11
+
+### Changed
+- `trowel` skips symbols whose window coverage is already ≥ 75% of expected
+  trading days, avoiding wasteful re-probes of nearly complete series.
+
 ## v0.6.1 — 2026-09-10
 
 ### Fixed
