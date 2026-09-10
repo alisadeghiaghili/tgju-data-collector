@@ -40,7 +40,7 @@ _HISTORY_HINTS = (
     "ons",
     "nima_",
     "sana_",
-    "commodit",
+    "commodity_",  # underscore form; hyphenated commodities-* has no OHLCV
     "basemetal",
     "aluminium",
     "aluminum",
@@ -49,6 +49,16 @@ _HISTORY_HINTS = (
     "retail_",
     "coin_",
     "blubber",
+    "base_global_",
+)
+
+# Table chrome that appears as market-row ids but is not a symbol.
+_EXCLUDE_PREFIXES = (
+    "cat_title",
+    "table_",
+    "header_",
+    "block_",
+    "widget_",
 )
 
 
@@ -82,11 +92,18 @@ def is_history_capable(
     if _NUMERIC_ID.match(lowered):
         return False
 
+    if lowered.startswith(_EXCLUDE_PREFIXES):
+        return False
+
+    # Hyphenated commodities-* pages have live tables but no chart history.
+    if lowered.startswith("commodities-"):
+        return False
+
     type_value = api_type
     if type_value is None and meta:
         type_value = meta.get("api_type") or None
-    if type_value:
-        # Search API already knows this symbol.
+    if type_value and isinstance(type_value, str) and not type_value.startswith("{"):
+        # Search API already knows this symbol (ignore raw JSON blobs).
         return True
 
     if any(hint in lowered for hint in _HISTORY_HINTS):

@@ -274,14 +274,7 @@ def run_quality_report(engine: Engine) -> dict[str, Any]:
 
     catalog_symbols = {row["symbol"] for row in catalog_rows}
     capable = {
-        row["symbol"]
-        for row in catalog_rows
-        if is_history_capable(
-            row["symbol"],
-            api_type=None,
-            meta={"api_type": row.get("meta_json") or ""},
-        )
-        or is_history_capable(row["symbol"])
+        row["symbol"] for row in catalog_rows if is_history_capable(row["symbol"])
     }
 
     price_report = check_price_bars(bar_rows)
