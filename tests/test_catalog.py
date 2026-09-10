@@ -57,6 +57,7 @@ def test_catalog_merges_html_and_api(sample_home_html: str) -> None:
     builder = CatalogBuilder(
         client,
         section_pages={"home": "https://www.tgju.org/"},
+        search_pause_sec=0.0,
     )
     catalog = builder.build()
     symbols = {s.symbol: s for s in catalog}
@@ -82,6 +83,7 @@ def test_catalog_handles_page_failure(sample_home_html: str) -> None:
             "missing": "https://www.tgju.org/does-not-exist",
         },
         search_queries=(),
+        search_pause_sec=0.0,
     )
     catalog = builder.build()
     assert len(catalog) == 4

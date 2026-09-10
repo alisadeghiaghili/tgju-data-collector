@@ -3,7 +3,7 @@
 Section-aware market data collector for [TGJU.org](https://www.tgju.org)
 (gold, currency, crypto, energy, metals, commodities, bourse, news).
 
-**Current version: v0.3.0**
+**Current version: v0.4.0**
 
 ## What it collects
 
@@ -91,7 +91,11 @@ src/tgju_collector/
   quality/           # OHLC / coverage checks
   storage/           # schema, repository, MSSQL helpers
   pipelines/         # sync + backfill orchestration
+  export.py          # CSV/Parquet/JSON export
   cli.py             # argparse entry point
+ops/
+  daily_job.bat      # Task Scheduler entrypoint
+  README.md          # rate profile + ops notes
 ```
 
 ## Testing

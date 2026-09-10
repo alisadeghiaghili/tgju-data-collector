@@ -61,10 +61,12 @@ class Settings:
     database_url: str = "sqlite:///tgju_collector.db"
     http_timeout: float = 30.0
     http_max_retries: int = 3
-    request_delay_min: float = 0.3
-    request_delay_max: float = 0.8
+    request_delay_min: float = 1.2
+    request_delay_max: float = 2.8
     user_agent: str = (
-        "tgju-collector/0.1 (+https://github.com/alisadeghiaghili/tgju-data-collector)"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
     )
     market_timezone: str = "Asia/Tehran"
     log_level: str = "INFO"

@@ -126,12 +126,15 @@ Catalog is built from market-row IDs + search API + newsearch batches.
 
 ## 6. HTTP Policy
 
-- Shared `requests.Session` per process.
-- Timeout default **30s** (not 100000).
+- Shared `requests.Session` per process (keep-alive).
+- Timeout default **30s**.
 - Retries: 3 attempts, exponential backoff `0.5 * 2**n` + jitter, cap 8s.
 - Distinguish `ConnectTimeout` by exception type, not message substring.
-- Polite delay 0.3–0.8s between page/API hits.
-- User-Agent identifies a research collector, not a fake browser claim.
+- Polite delay **1.2–2.8s** (jittered) between page/API hits.
+- Search-API expansion pauses an extra 0.8s between queries.
+- Browser-like Accept / Accept-Language / Referer headers.
+- Default User-Agent is a normal desktop Chrome string; no package token.
+- No concurrent fan-out; single-threaded collection only.
 
 ## 7. Roadmap / Versions
 

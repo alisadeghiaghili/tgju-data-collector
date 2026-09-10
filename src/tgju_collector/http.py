@@ -20,6 +20,24 @@ import requests
 
 logger = logging.getLogger("tgju_collector.http")
 
+# Browser-like defaults. Deliberately omit any package/self-identifying token
+# in the User-Agent so traffic looks like an ordinary desktop browser session.
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/122.0.0.0 Safari/537.36"
+)
+
+DEFAULT_BROWSER_HEADERS: dict[str, str] = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+              "application/json;q=0.8,*/*;q=0.7",
+    "Accept-Language": "fa-IR,fa;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Referer": "https://www.tgju.org/",
+}
+
 
 class HttpClient:
     """Shared HTTP client for TGJU endpoints.
@@ -33,6 +51,7 @@ class HttpClient:
         delay_max: Maximum sleep between successful page fetches.
         user_agent: Value for the ``User-Agent`` header.
         session: Optional pre-built session (useful in tests).
+        browser_headers: Whether to seed realistic browser headers.
     """
 
     def __init__(
@@ -42,10 +61,11 @@ class HttpClient:
         max_retries: int = 3,
         backoff_base: float = 0.5,
         backoff_cap: float = 8.0,
-        delay_min: float = 0.3,
-        delay_max: float = 0.8,
-        user_agent: str = "tgju-collector/0.1",
+        delay_min: float = 1.2,
+        delay_max: float = 2.8,
+        user_agent: str = DEFAULT_USER_AGENT,
         session: requests.Session | None = None,
+        browser_headers: bool = True,
     ) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be positive")
@@ -61,6 +81,9 @@ class HttpClient:
         self.delay_min = delay_min
         self.delay_max = delay_max
         self.session = session or requests.Session()
+        if browser_headers:
+            for key, value in DEFAULT_BROWSER_HEADERS.items():
+                self.session.headers.setdefault(key, value)
         self.session.headers.setdefault("User-Agent", user_agent)
         self._last_request_at: float | None = None
 
