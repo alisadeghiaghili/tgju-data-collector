@@ -49,3 +49,19 @@ env/
 # Logs
 *.log
 logs/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# Local research dumps
+scripts/api_samples/
+scripts/discover_output.json
+
+# Packaging
+*.egg-info/
+.eggs/
+dist/
