@@ -3,7 +3,7 @@
 Section-aware market data collector for [TGJU.org](https://www.tgju.org)
 (gold, currency, crypto, energy, metals, commodities, bourse, news).
 
-**Current version: v0.4.0**
+**Current version: v0.5.0**
 
 ## What it collects
 
@@ -106,11 +106,16 @@ pytest
 
 Tests are offline (fixtures + fakes). No live network required.
 
-## Legacy scripts
+## Migration from v1 scripts
 
-`tgjuScraper.py`, `tgju_scraper.py`, and `AutoTrowel_TGJU.py` are the previous
-generation scripts. They are superseded by `src/tgju_collector` and kept only
-until migration is complete. Prefer the `tgju` CLI.
+If you previously ran `tgjuScraper.py` / `AutoTrowel_TGJU.py`:
+
+1. Point `TGJU_DB_URL` at the same SQL Server database
+   (`mssql+pyodbc://...`).
+2. The new schema uses `symbols` / `price_bars` / `live_snapshots` /
+   `news_items` with unique keys. The old `TgjuAssets` table is left
+   untouched — export or copy it yourself if you still need it.
+3. Run `tgju sync-catalog` then `tgju backfill --from-catalog`.
 
 ## License
 

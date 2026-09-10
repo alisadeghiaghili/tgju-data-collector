@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.0 — 2026-09-10
+
+### Removed
+- Legacy entrypoints: `tgjuScraper.py`, `tgju_scraper.py`, `AutoTrowel_TGJU.py`.
+  Use the `tgju` CLI under `src/tgju_collector` instead. See README
+  "Migration from v1 scripts".
+
+### Added
+- `LICENSE` (MIT).
+
 ## v0.4.0 — 2026-09-10
 
 ### Changed
