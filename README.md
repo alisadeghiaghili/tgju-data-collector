@@ -3,7 +3,7 @@
 Section-aware market data collector for [TGJU.org](https://www.tgju.org)
 (gold, currency, crypto, energy, metals, commodities, bourse, news).
 
-**Current version: v0.1.0**
+**Current version: v0.2.0**
 
 ## What it collects
 
@@ -47,6 +47,16 @@ tgju sync-live --pages home,crypto
 tgju sync-history --symbol sekee --days 14
 tgju sync-history --from-catalog --days 30
 
+# News
+tgju sync-news --count 30
+
+# Backfill gaps (skips Fridays and Iranian holidays)
+tgju backfill --symbol sekee --max-days 365
+tgju backfill --from-catalog
+
+# Data quality (exit code 1 if issues found)
+tgju quality
+
 # Database status
 tgju status
 ```
@@ -70,10 +80,13 @@ src/tgju_collector/
   models.py          # Symbol, PriceBar, LiveSnapshot, NewsItem
   sections.py        # product-section taxonomy
   dates.py           # Asia/Tehran date helpers
+  calendar/          # Iranian trading calendar (Fridays + holidays)
   discovery/         # catalog + HTML parsers
   clients/           # history API
-  collectors/        # live snapshots
-  storage/           # schema + repository (SQLAlchemy 2.0)
+  collectors/        # live snapshots + news
+  quality/           # OHLC / coverage checks
+  storage/           # schema, repository, MSSQL helpers
+  pipelines/         # sync + backfill orchestration
   cli.py             # argparse entry point
 ```
 
