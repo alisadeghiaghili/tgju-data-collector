@@ -3,7 +3,7 @@
 Section-aware market data collector for [TGJU.org](https://www.tgju.org)
 (gold, currency, crypto, energy, metals, commodities, bourse, news).
 
-**Current version: v0.2.0**
+**Current version: v0.3.0**
 
 ## What it collects
 
@@ -56,6 +56,10 @@ tgju backfill --from-catalog
 
 # Data quality (exit code 1 if issues found)
 tgju quality
+
+# Export
+tgju export --table price_bars --output out/bars.csv --symbol sekee
+tgju export --table symbols --output out/catalog.json
 
 # Database status
 tgju status

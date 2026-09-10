@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.3.0 — 2026-09-10
+
+### Added
+- Export command: `tgju export --table price_bars|live_snapshots|symbols`
+  writing CSV, Parquet, or JSON (optional `--symbol` / `--section` filter).
+
+### Fixed (from live smoke test)
+- History API ignores `from`/`to` and can return full history; client now
+  filters bars to the requested window before returning.
+- TGJU sometimes returns inverted low/high; parser swaps and keeps the bar
+  instead of dropping the whole symbol.
+- Multiple API timestamps can collapse to one Tehran trade date; repository
+  dedupes by `(symbol, trade_date, timeframe)` and bulk-inserts.
+- News API payload is `response.items.data`, not `response.news`.
+- History symbols normalized to lowercase to match catalog keys.
+- `gc*` / `retail_*` coin symbols classified as gold_coin when labels indicate
+  coins (previously forced into bourse).
+
 ## v0.2.0 — 2026-02-10
 
 ### Added

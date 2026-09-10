@@ -85,6 +85,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum lookback window in calendar days",
     )
 
+    p_export = sub.add_parser("export", help="Export stored tables to CSV/Parquet/JSON")
+    p_export.add_argument(
+        "--table",
+        choices=("price_bars", "live_snapshots", "symbols"),
+        default="price_bars",
+        help="Table to export",
+    )
+    p_export.add_argument("--output", required=True, help="Output path (.csv/.parquet/.json)")
+    p_export.add_argument("--symbol", default=None, help="Optional symbol filter")
+    p_export.add_argument("--section", default=None, help="Optional section filter (symbols only)")
+
     sub.add_parser("quality", help="Run data-quality checks on stored data")
     sub.add_parser("status", help="Show row counts from the database")
 
@@ -111,6 +122,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_status(settings, logger)
     if args.command == "quality":
         return _cmd_quality(settings, logger)
+    if args.command == "export":
+        return _cmd_export(
+            settings,
+            logger,
+            table=args.table,
+            output=args.output,
+            symbol=args.symbol,
+            section=args.section,
+        )
 
     with HttpClient(
         timeout=settings.http_timeout,
@@ -266,6 +286,28 @@ def _cmd_backfill(
             logger.info(message)
         total += result.bars
     logger.info("total_backfilled=%s", total)
+    return 0
+
+
+def _cmd_export(
+    settings: Settings,
+    logger,
+    *,
+    table: str,
+    output: str,
+    symbol: str | None,
+    section: str | None,
+) -> int:
+    from .export import export_live_snapshots, export_price_bars, export_symbols
+
+    engine = _engine(settings)
+    if table == "price_bars":
+        path = export_price_bars(engine, output, symbol=symbol)
+    elif table == "live_snapshots":
+        path = export_live_snapshots(engine, output, symbol=symbol)
+    else:
+        path = export_symbols(engine, output, section=section)
+    logger.info("exported %s to %s", table, path)
     return 0
 
 
